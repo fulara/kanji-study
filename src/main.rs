@@ -61,6 +61,11 @@ impl Book {
 
         f.write_all(serialized.as_bytes());
     }
+
+    pub fn add_save(&mut self, entry: Entry, file_name: &str) {
+        self.add(entry);
+        self.save(file_name);
+    }
 }
 
 mod kanji_dict;
@@ -205,7 +210,7 @@ fn main() {
                 let mut matching_kanjis = Vec::new();
 
                 for k in &lookup_dict {
-                    if pattern.contains(k.literal) || k.meaning.contains(&pattern) {
+                    if pattern.contains(k.literal) || k.meaning.iter().any(|m| m.contains(&pattern)) {
                         matching_kanjis.push(k.clone());
                     }
                 }
@@ -224,68 +229,29 @@ fn main() {
                     .expect("That wasnt a number");
                 if let Some(k) = matching_kanjis.get(number) {
                     term.write_line(&format!("You have selected: {:?}", k));
+
+                    term.write_line("Do you wish to add it to your knowledge base? [y/N]");
+                    if term.read_char().unwrap().to_ascii_lowercase() == 'y' {
+                        book.add_save(Entry {
+                            kanji : k.clone(),
+                            confidence_level : 0,
+                        }, file_name);
+                        term.write_line(&format!("Added {} to your base", k.literal));
+                    } else {
+                        term.write_line("Skipping addition.");
+                    }
                 }
 
                 term.write_line("Press return to continue.");
                 term.read_line();
-
-                // for k in &dict.character {
-                // if pattern.contains(k.literal) || k.reading_meaning.unwrap_or(kanji_dict::ReadingMeaning).rmgroup.meaning.iter().any(|m| m.iter().any(|m| m.value.contains(&pattern))) {
-                //     term.write_line(&format!("Found kanji matching your pattern: {}", k.literal));
-                //
-                //     term.write_line("Press key to continue");
-                //
-                //     term.read_key();
-                // }
-                // }
-
-                // term.write_line(&format!("processing kanji: {}", kanji));
-                // let mut romanjis = Vec::new();
-                // let mut meanings = Vec::new();
-                //
-                // term.write_line("Gimme its Romanji: ").unwrap();
-                // let mut continue_prompting = true;
-                // while continue_prompting {
-                //     let romanji = term.read_line().unwrap();
-                //     romanjis.push(romanji);
-                //     term.write_line("More romanjis y/N ?");
-                //
-                //     continue_prompting = term.read_char().unwrap().to_ascii_lowercase() == 'y'
-                // }
-                //
-                // term.write_line(&format!("Gimme meaning of({}): ", kanji)).unwrap();
-                // let mut continue_prompting = true;
-                // while continue_prompting {
-                //     let meaning = term.read_line().unwrap();
-                //     meanings.push(meaning);
-                //     term.write_line("More Meanings y/N ?");
-                //
-                //     continue_prompting = term.read_char().unwrap().to_ascii_lowercase() == 'y'
-                // }
-                //
-                // term.write_line(&format!("Kanji to be added: {}", kanji));
-                // term.write_line(&format!("its romanjis are as follows: {:?}", romanjis));
-                // term.write_line(&format!("its meanings are as follows: {:?}", meanings));
-                // term.write_line("\nAdd it to the dictionary y/N?");
-                //
-                // if term.read_char().unwrap().to_ascii_lowercase() == 'y' {
-                //     book.add(KanjiEntry {
-                //         kanji,
-                //         romanjis,
-                //         confidence_level : Confidence { level : 0},
-                //         meaning : meanings,
-                //     });
-                //
-                //     book.save(file_name);
-                // }
             }
             'l' => {
-                // for (counter, (_, kanji)) in book.kanjis.iter().enumerate() {
-                //     term.write_line(&format!("[{}] {}: {:?}", counter, kanji.kanji, kanji.romanjis));
-                // }
-                //
-                // term.write_line("Press any key to continue.");
-                // term.read_char();
+                for (counter, (_, kanji)) in book.kanjis.iter().enumerate() {
+                    term.write_line(&format!("[{}] {:?}", counter, kanji.kanji));
+                }
+
+                term.write_line("Press any key to continue.");
+                term.read_char();
             }
             _ => {
                 return;
