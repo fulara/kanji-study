@@ -1,46 +1,45 @@
 use serde_xml_rs as serde_xml;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CpValue {
-    pub cp_type : String,
+    pub cp_type: String,
     #[serde(rename = "$value")]
-    pub value : String,
+    pub value: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CodePoint {
-    pub cp_value : Vec<CpValue>,
+    pub cp_value: Vec<CpValue>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RadValue {
-    pub rad_type : String,
+    pub rad_type: String,
     #[serde(rename = "$value")]
-    pub value : String,
+    pub value: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Radical {
-    pub rad_value : Vec<RadValue>,
+    pub rad_value: Vec<RadValue>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Misc {
-    pub grade : Option<u32>,
-    pub stroke_count : Vec<u32>,
-    pub freq : Option<u32>,
-    pub jlpt : Option<u32>,
-
+    pub grade: Option<u32>,
+    pub stroke_count: Vec<u32>,
+    pub freq: Option<u32>,
+    pub jlpt: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Reading {
     // important ones are ja_on and ja_kun
-    pub r_type : String,
+    pub r_type: String,
     #[serde(rename = "$value")]
-    pub value : String,
+    pub value: String,
 }
 
 fn default_m_lang() -> String {
@@ -50,40 +49,40 @@ fn default_m_lang() -> String {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Meaning {
     #[serde(default = "default_m_lang")]
-    pub m_lang : String,
+    pub m_lang: String,
     #[serde(rename = "$value")]
-    pub value : String,
+    pub value: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RmGroup {
     //there are very few but indeed there are some kanjis without reading entries present.
-    pub reading : Option<Vec<Reading>>,
-    pub meaning : Option<Vec<Meaning>>,
+    pub reading: Option<Vec<Reading>>,
+    pub meaning: Option<Vec<Meaning>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ReadingMeaning {
-    pub rmgroup : RmGroup,
+    pub rmgroup: RmGroup,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Character {
-    pub literal : char,
-    pub codepoint : CodePoint,
-    pub radical : Radical,
-    pub misc : Misc,
-    pub reading_meaning : Option<ReadingMeaning>,
+    pub literal: char,
+    pub codepoint: CodePoint,
+    pub radical: Radical,
+    pub misc: Misc,
+    pub reading_meaning: Option<ReadingMeaning>,
 }
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KanjiDictionary {
-    pub character : Vec<Character>,
+    pub character: Vec<Character>,
 }
 
 #[cfg(test)]
 mod kanji_tests {
-    use serde_xml_rs as serde_xml;
     use super::*;
+    use serde_xml_rs as serde_xml;
 
     #[test]
     fn basic_deser() {
@@ -215,5 +214,4 @@ mod kanji_tests {
         let first = x.character.first().unwrap();
         assert_eq!('亜', first.literal);
     }
-
 }

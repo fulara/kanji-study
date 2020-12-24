@@ -1,35 +1,33 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use rand::Rng;
 use std::io::Write;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Kanji {
-    on_readings : Vec<String>,
-    kun_readings : Vec<String>,
-    meaning : Vec<String>,
-    literal : char,
+    on_readings: Vec<String>,
+    kun_readings: Vec<String>,
+    meaning: Vec<String>,
+    literal: char,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Entry {
-    kanji : Kanji,
-    confidence_level : i32, // 0 - 5?
+    kanji: Kanji,
+    confidence_level: i32, // 0 - 5?
 }
 
 #[derive(Debug)]
 struct Book {
-    kanjis : BTreeMap <char, Entry>,
+    kanjis: BTreeMap<char, Entry>,
 }
 
 impl Book {
-    pub fn new(kanjis : BTreeMap<char, Entry>) -> Self {
-        Book {
-            kanjis,
-        }
+    pub fn new(kanjis: BTreeMap<char, Entry>) -> Self {
+        Book { kanjis }
     }
 
     pub fn roll(&self) -> Kanji {
@@ -51,14 +49,15 @@ impl Book {
     pub fn add(&mut self, entry: Entry) {
         self.kanjis.insert(entry.kanji.literal, entry);
     }
-    pub fn save(&self, file_name : &str) {
+    pub fn save(&self, file_name: &str) {
         println!("will now attempt to serialize: {:?}", self);
 
         let serialized = serde_json::to_string(&self.kanjis).expect("Unable to serialize book!");
         let mut f = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
-            .open(file_name).expect("Couldnt open file for writing.");
+            .open(file_name)
+            .expect("Couldnt open file for writing.");
 
         f.write_all(serialized.as_bytes());
     }
@@ -66,7 +65,7 @@ impl Book {
 
 mod kanji_dict;
 
-fn convert_parsed_to_kanji_vec(kanji_dictionary : &kanji_dict::KanjiDictionary) -> Vec<Kanji> {
+fn convert_parsed_to_kanji_vec(kanji_dictionary: &kanji_dict::KanjiDictionary) -> Vec<Kanji> {
     let mut kanji_vec = Vec::new();
     for c in &kanji_dictionary.character {
         let mut reading_on = Vec::new();
@@ -101,19 +100,37 @@ fn convert_parsed_to_kanji_vec(kanji_dictionary : &kanji_dict::KanjiDictionary) 
     kanji_vec
 }
 
-fn build_sled_db(sled_db : &sled::Tree, lookup_dict : &Vec<Kanji>) {
-    println!("now writing to sled: {}", std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).expect("before").as_secs());
+fn build_sled_db(sled_db: &sled::Tree, lookup_dict: &Vec<Kanji>) {
+    println!(
+        "now writing to sled: {}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .expect("before")
+            .as_secs()
+    );
     for k in lookup_dict {
         let v = serde_json::to_string(&k).expect("unable to ser");
         sled_db.insert(k.literal.to_string(), v.as_str());
     }
     sled_db.flush();
-    println!("done writing to sled: {}", std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).expect("after").as_secs());
+    println!(
+        "done writing to sled: {}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .expect("after")
+            .as_secs()
+    );
 }
 
-fn load_sled_db_to_silly_vec(sled_db : &sled::Tree) -> Vec<Kanji> {
+fn load_sled_db_to_silly_vec(sled_db: &sled::Tree) -> Vec<Kanji> {
     let mut silly_vec = Vec::new();
-    println!("now converting from sled: {}", std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).expect("before").as_secs());
+    println!(
+        "now converting from sled: {}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .expect("before")
+            .as_secs()
+    );
     for e in sled_db.iter() {
         let e = e.unwrap();
         // let key= String::from_utf8(e.0.to_vec()).unwrap();
@@ -121,23 +138,30 @@ fn load_sled_db_to_silly_vec(sled_db : &sled::Tree) -> Vec<Kanji> {
 
         silly_vec.push(kanji);
     }
-    println!("finished converting from sled: {}", std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).expect("before").as_secs());
+    println!(
+        "finished converting from sled: {}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .expect("before")
+            .as_secs()
+    );
 
     silly_vec
 }
 
 fn parse_dict() -> kanji_dict::KanjiDictionary {
-    serde_xml_rs::from_reader(std::fs::File::open("kanjidic2.xml").expect("Couldnt open dict file")).expect("Couldnt load dict!")
+    serde_xml_rs::from_reader(std::fs::File::open("kanjidic2.xml").expect("Couldnt open dict file"))
+        .expect("Couldnt load dict!")
 }
 
 fn main() {
     let file_name = "dict.json";
-    let mut entries: BTreeMap<char, Entry>  = if Path::new(file_name).exists() {
-        serde_json::from_reader(std::fs::File::open(file_name).expect("Couldnt open file")).expect(&format!("Unable to parse out dict from {}", file_name))
+    let mut entries: BTreeMap<char, Entry> = if Path::new(file_name).exists() {
+        serde_json::from_reader(std::fs::File::open(file_name).expect("Couldnt open file"))
+            .expect(&format!("Unable to parse out dict from {}", file_name))
     } else {
         BTreeMap::new()
     };
-
 
     let db = sled::open("kanji.db").expect("opening db files");
     let lookup_dict = load_sled_db_to_silly_vec(&db);
@@ -145,7 +169,6 @@ fn main() {
     // let mut lookup_dict = Vec::new();
 
     let mut book = Book::new(entries);
-
 
     let term = console::Term::stdout();
 
@@ -158,12 +181,10 @@ fn main() {
         //     term.read_key();
         // }
 
-
-        term.write_line("Poll[y] add[a] add-[f]ull [l]ist anything else exits.").unwrap();
+        term.write_line("Poll[y] add[a] add-[f]ull [l]ist anything else exits.")
+            .unwrap();
         match term.read_char().unwrap() {
-            'y' => {
-
-            }
+            'y' => {}
             'f' => {
                 // term.write_line("Selected add full, easier faster adding, here is a template:").unwrap();
                 // term.write_line(r#"{"romanjis":["ichi"],"meaning":["one"],"kanji":"一","confidence_level":{"level":0}}"#).unwrap();
@@ -177,7 +198,8 @@ fn main() {
                 // }
             }
             'a' => {
-                term.write_line("Gimme Pattern to search the dict by either kanji or meaning: ").unwrap();
+                term.write_line("Gimme Pattern to search the dict by either kanji or meaning: ")
+                    .unwrap();
                 let pattern = term.read_line().unwrap();
 
                 let mut matching_kanjis = Vec::new();
@@ -195,7 +217,11 @@ fn main() {
 
                 term.write_line("Has any of those matched your query? pick the number");
 
-                let number : usize = term.read_line().unwrap().parse().expect("That wasnt a number");
+                let number: usize = term
+                    .read_line()
+                    .unwrap()
+                    .parse()
+                    .expect("That wasnt a number");
                 if let Some(k) = matching_kanjis.get(number) {
                     term.write_line(&format!("You have selected: {:?}", k));
                 }
@@ -203,16 +229,14 @@ fn main() {
                 term.write_line("Press return to continue.");
                 term.read_line();
 
-
-
                 // for k in &dict.character {
-                    // if pattern.contains(k.literal) || k.reading_meaning.unwrap_or(kanji_dict::ReadingMeaning).rmgroup.meaning.iter().any(|m| m.iter().any(|m| m.value.contains(&pattern))) {
-                    //     term.write_line(&format!("Found kanji matching your pattern: {}", k.literal));
-                    //
-                    //     term.write_line("Press key to continue");
-                    //
-                    //     term.read_key();
-                    // }
+                // if pattern.contains(k.literal) || k.reading_meaning.unwrap_or(kanji_dict::ReadingMeaning).rmgroup.meaning.iter().any(|m| m.iter().any(|m| m.value.contains(&pattern))) {
+                //     term.write_line(&format!("Found kanji matching your pattern: {}", k.literal));
+                //
+                //     term.write_line("Press key to continue");
+                //
+                //     term.read_key();
+                // }
                 // }
 
                 // term.write_line(&format!("processing kanji: {}", kanji));
