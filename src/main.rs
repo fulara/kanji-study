@@ -66,24 +66,13 @@ impl Book {
 
 mod kanji_dict;
 
-fn main() {
-    let file_name = "dict.json";
-    let mut entries: BTreeMap<char, Entry>  = if Path::new(file_name).exists() {
-        serde_json::from_reader(std::fs::File::open(file_name).expect("Couldnt open file")).expect(&format!("Unable to parse out dict from {}", file_name))
-    } else {
-        BTreeMap::new()
-    };
-
-    let dict : kanji_dict::KanjiDictionary = serde_xml_rs::from_reader(std::fs::File::open("kanjidic2.xml").expect("Couldnt open dict file")).expect("Couldnt load dict!");
-    let mut lookup_dict = Vec::new();
-
-    let mut book = Book::new(entries);
-
-    for c in dict.character {
+fn convert_parsed_to_kanji_vec(kanji_dictionary : &kanji_dict::KanjiDictionary) -> Vec<Kanji> {
+    let mut kanji_vec = Vec::new();
+    for c in &kanji_dictionary.character {
         let mut reading_on = Vec::new();
         let mut reading_kun = Vec::new();
         let mut meaning = Vec::new();
-        if let Some(reading_meaning) = c.reading_meaning {
+        if let Some(reading_meaning) = c.reading_meaning.clone() {
             let reading = reading_meaning.rmgroup.reading.unwrap_or(vec![]);
             for r in reading {
                 if r.r_type == "ja_on" {
@@ -101,13 +90,62 @@ fn main() {
             }
         }
 
-        lookup_dict.push(Kanji {
+        kanji_vec.push(Kanji {
             meaning,
             literal: c.literal,
             kun_readings: reading_kun,
             on_readings: reading_on,
         });
     }
+
+    kanji_vec
+}
+
+fn build_sled_db(sled_db : &sled::Tree, lookup_dict : &Vec<Kanji>) {
+    println!("now writing to sled: {}", std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).expect("before").as_secs());
+    for k in lookup_dict {
+        let v = serde_json::to_string(&k).expect("unable to ser");
+        sled_db.insert(k.literal.to_string(), v.as_str());
+    }
+    sled_db.flush();
+    println!("done writing to sled: {}", std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).expect("after").as_secs());
+}
+
+fn load_sled_db_to_silly_vec(sled_db : &sled::Tree) -> Vec<Kanji> {
+    let mut silly_vec = Vec::new();
+    println!("now converting from sled: {}", std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).expect("before").as_secs());
+    for e in sled_db.iter() {
+        let e = e.unwrap();
+        // let key= String::from_utf8(e.0.to_vec()).unwrap();
+        let kanji = serde_json::from_slice(&e.1.to_vec()).unwrap();
+
+        silly_vec.push(kanji);
+    }
+    println!("finished converting from sled: {}", std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).expect("before").as_secs());
+
+    silly_vec
+}
+
+fn parse_dict() -> kanji_dict::KanjiDictionary {
+    serde_xml_rs::from_reader(std::fs::File::open("kanjidic2.xml").expect("Couldnt open dict file")).expect("Couldnt load dict!")
+}
+
+fn main() {
+    let file_name = "dict.json";
+    let mut entries: BTreeMap<char, Entry>  = if Path::new(file_name).exists() {
+        serde_json::from_reader(std::fs::File::open(file_name).expect("Couldnt open file")).expect(&format!("Unable to parse out dict from {}", file_name))
+    } else {
+        BTreeMap::new()
+    };
+
+
+    let db = sled::open("kanji.db").expect("opening db files");
+    let lookup_dict = load_sled_db_to_silly_vec(&db);
+
+    // let mut lookup_dict = Vec::new();
+
+    let mut book = Book::new(entries);
+
 
     let term = console::Term::stdout();
 
