@@ -10,7 +10,7 @@ struct KanjiDrawRecipe {
 impl KanjiDrawRecipe {
     fn color_table() -> [&'static str; 74] {
         [
-            "arkmagenta",
+            "darkmagenta",
             "darkolivegreen",
             "darkorange",
             "darkorchid",
@@ -97,13 +97,14 @@ impl KanjiDrawRecipe {
             body = format!(
                 r#"{}
 <path style="fill:none;stroke:{color};stroke-width:2" d="{}"/>
-<text x="{x}" y="{y}" style="stroke:black" font-size="5">1</text>
-<text x="{x}" y="{y}" style="fill:{color}" font-size="5">1</text>"#,
+<text x="{x}" y="{y}" style="stroke:black" font-size="5">{index}</text>
+<text x="{x}" y="{y}" style="fill:{color}" font-size="5">{index}</text>"#,
                 body,
                 p.d,
                 x = x,
                 y = y,
-                color = Self::color_table()[index]
+                color = Self::color_table()[index],
+                index = index+1,
             )
         }
 
@@ -179,15 +180,15 @@ mod kanjivg_strokes {
 
         let expected = r#"
 <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" version="1.1"  baseProfile="full">
-<path style="fill:none;stroke:arkmagenta;stroke-width:2" d="M52.75,10.25c0.11,1.12,0,3.49-0.72,4.99C47.5,24.75,34.25,45,14.25,57.75"/>
+<path style="fill:none;stroke:darkmagenta;stroke-width:2" d="M52.75,10.25c0.11,1.12,0,3.49-0.72,4.99C47.5,24.75,34.25,45,14.25,57.75"/>
 <text x="52.75" y="10.25" style="stroke:black" font-size="5">1</text>
-<text x="52.75" y="10.25" style="fill:arkmagenta" font-size="5">1</text>
+<text x="52.75" y="10.25" style="fill:darkmagenta" font-size="5">1</text>
 <path style="fill:none;stroke:darkolivegreen;stroke-width:2" d="M51.75,15.75c5.92,7.28,31.44,31.07,37.97,36.4c2.22,1.81,5.06,2.58,7.28,3.1"/>
-<text x="51.75" y="15.75" style="stroke:black" font-size="5">1</text>
-<text x="51.75" y="15.75" style="fill:darkolivegreen" font-size="5">1</text>
+<text x="51.75" y="15.75" style="stroke:black" font-size="5">2</text>
+<text x="51.75" y="15.75" style="fill:darkolivegreen" font-size="5">2</text>
 <path style="fill:none;stroke:darkorange;stroke-width:2" d="M51.87,46.25c1.09,0.5,1.74,2.25,1.96,3.25c0.22,1,0,43.25-0.22,49.5"/>
-<text x="51.87" y="46.25" style="stroke:black" font-size="5">1</text>
-<text x="51.87" y="46.25" style="fill:darkorange" font-size="5">1</text>
+<text x="51.87" y="46.25" style="stroke:black" font-size="5">3</text>
+<text x="51.87" y="46.25" style="fill:darkorange" font-size="5">3</text>
 </svg>
         "#.trim();
 
