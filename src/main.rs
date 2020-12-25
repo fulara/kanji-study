@@ -160,6 +160,12 @@ fn parse_dict() -> kanji_dict::KanjiDictionary {
 }
 
 fn main() {
+    // open::that("test.svg");
+    let c = 0x2c as char;
+    println!("kanji_{:0>5x} c: {}", '円' as u32, c);
+    // ::std::process::Command::new(r#"C:\programming\rust\kanji-initiator\test.svg"#).status().unwrap();
+    // println!("hai");
+    ::std::thread::sleep_ms(100000);
     let file_name = "dict.json";
     let mut entries: BTreeMap<char, Entry> = if Path::new(file_name).exists() {
         serde_json::from_reader(std::fs::File::open(file_name).expect("Couldnt open file"))

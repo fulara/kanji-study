@@ -136,6 +136,7 @@ name = "kanji-initiator"
 version = "0.1.0"
 dependencies = [
  "console",
+ "open",
  "rand",
  "serde",
  "serde-xml-rs",
@@ -180,6 +181,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "157b4208e3059a8f9e78d559edc658e13df41410cb3ae03979c83130067fdd87"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "open"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c283bf0114efea9e42f1a60edea9859e8c47528eae09d01df4b29c1e489cc48"
+dependencies = [
+ "winapi",
 ]
 
 [[package]]
