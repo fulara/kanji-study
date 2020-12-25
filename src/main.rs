@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 use rand::Rng;
 use std::io::Write;
 
+mod kanji_dict;
+mod kanji_strokes;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Kanji {
     on_readings: Vec<String>,
@@ -67,8 +70,6 @@ impl Book {
         self.save(file_name);
     }
 }
-
-mod kanji_dict;
 
 fn convert_parsed_to_kanji_vec(kanji_dictionary: &kanji_dict::KanjiDictionary) -> Vec<Kanji> {
     let mut kanji_vec = Vec::new();
@@ -216,7 +217,8 @@ fn main() {
                 let mut matching_kanjis = Vec::new();
 
                 for k in &lookup_dict {
-                    if pattern.contains(k.literal) || k.meaning.iter().any(|m| m.contains(&pattern)) {
+                    if pattern.contains(k.literal) || k.meaning.iter().any(|m| m.contains(&pattern))
+                    {
                         matching_kanjis.push(k.clone());
                     }
                 }
@@ -238,10 +240,13 @@ fn main() {
 
                     term.write_line("Do you wish to add it to your knowledge base? [y/N]");
                     if term.read_char().unwrap().to_ascii_lowercase() == 'y' {
-                        book.add_save(Entry {
-                            kanji : k.clone(),
-                            confidence_level : 0,
-                        }, file_name);
+                        book.add_save(
+                            Entry {
+                                kanji: k.clone(),
+                                confidence_level: 0,
+                            },
+                            file_name,
+                        );
                         term.write_line(&format!("Added {} to your base", k.literal));
                     } else {
                         term.write_line("Skipping addition.");
