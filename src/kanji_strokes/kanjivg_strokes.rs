@@ -87,7 +87,7 @@ impl KanjiDrawRecipe {
         ]
     }
     fn generate_svg(&self) -> String {
-        let header = r#"<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" version="1.1"  baseProfile="full">"#;
+        let header = r#"<svg width="109" height="109" viewBox="0 0 109 109" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" version="1.1"  baseProfile="full">"#;
         let tail = r#"</svg>"#;
 
         let mut body = String::new();
@@ -179,7 +179,7 @@ mod kanjivg_strokes {
         let draw_recipe: &KanjiDrawRecipe = strokes.dict.get(&'个').unwrap();
 
         let expected = r#"
-<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" version="1.1"  baseProfile="full">
+<svg width="109" height="109" viewBox="0 0 109 109" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" version="1.1"  baseProfile="full">
 <path style="fill:none;stroke:darkmagenta;stroke-width:2" d="M52.75,10.25c0.11,1.12,0,3.49-0.72,4.99C47.5,24.75,34.25,45,14.25,57.75"/>
 <text x="52.75" y="10.25" style="stroke:black" font-size="5">1</text>
 <text x="52.75" y="10.25" style="fill:darkmagenta" font-size="5">1</text>
