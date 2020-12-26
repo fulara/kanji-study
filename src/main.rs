@@ -14,6 +14,7 @@ struct Kanji {
     on_readings: Vec<String>,
     kun_readings: Vec<String>,
     meaning: Vec<String>,
+    strokes: Option<kanji_strokes::KanjiDrawRecipe>,
     literal: char,
 }
 
@@ -46,7 +47,7 @@ impl Book {
         //     }
         // }
 
-        panic!("should always pick out a random kanji.")
+        panic!("should always pick out a random kanji. not really, go from lowest confidenc elevel and there pick now")
     }
 
     pub fn add(&mut self, entry: Entry) {
@@ -71,7 +72,10 @@ impl Book {
     }
 }
 
-fn convert_parsed_to_kanji_vec(kanji_dictionary: &kanji_dict::KanjiDictionary) -> Vec<Kanji> {
+fn convert_parsed_to_kanji_vec(
+    kanji_dictionary: &kanji_dict::KanjiDictionary,
+    kanji_strokes_dict: &kanji_strokes::Strokes,
+) -> Vec<Kanji> {
     let mut kanji_vec = Vec::new();
     for c in &kanji_dictionary.character {
         let mut reading_on = Vec::new();
@@ -100,6 +104,7 @@ fn convert_parsed_to_kanji_vec(kanji_dictionary: &kanji_dict::KanjiDictionary) -
             literal: c.literal,
             kun_readings: reading_kun,
             on_readings: reading_on,
+            strokes: kanji_strokes_dict.dict.get(&c.literal).cloned(),
         });
     }
 
@@ -161,12 +166,6 @@ fn parse_dict() -> kanji_dict::KanjiDictionary {
 }
 
 fn main() {
-    // open::that("test.svg");
-    let c = 0x2c as char;
-    println!("kanji_{:0>5x} c: {}", '円' as u32, c);
-    // ::std::process::Command::new(r#"C:\programming\rust\kanji-initiator\test.svg"#).status().unwrap();
-    // println!("hai");
-    ::std::thread::sleep_ms(100000);
     let file_name = "dict.json";
     let mut entries: BTreeMap<char, Entry> = if Path::new(file_name).exists() {
         serde_json::from_reader(std::fs::File::open(file_name).expect("Couldnt open file"))
@@ -175,7 +174,23 @@ fn main() {
         BTreeMap::new()
     };
 
+    if !std::path::Path::new("kanji.db").exists() {
+        let kanjivg = kanji_strokes::parse_kanjivg();
+        let strokes = kanji_strokes::kanjivg_into_strokes(&kanjivg);
+        let dict = parse_dict();
+
+        let parsed = convert_parsed_to_kanji_vec(&dict, &strokes);
+
+        let db = sled::open("kanji.db").expect("opening db files");
+
+        build_sled_db(&db, &parsed);
+    }
+
+    // std::
+    // if(Path::)
+
     let db = sled::open("kanji.db").expect("opening db files");
+
     let lookup_dict = load_sled_db_to_silly_vec(&db);
 
     // let mut lookup_dict = Vec::new();
@@ -193,7 +208,7 @@ fn main() {
         //     term.read_key();
         // }
 
-        term.write_line("Poll[y] add[a] add-[f]ull [l]ist anything else exits.")
+        term.write_line("Poll[y] add[a] add-[f]ull [l]ist anything else exits. [s]troke")
             .unwrap();
         match term.read_char().unwrap() {
             'y' => {}
@@ -263,6 +278,32 @@ fn main() {
 
                 term.write_line("Press any key to continue.");
                 term.read_char();
+            }
+            's' => {
+                term.write_line("Type in kanji you want to see the strokes of");
+                let kanji = term.read_char().expect("char was suppoesd to be here!");
+                let k = if let Some(k) = lookup_dict.iter().find(|p| p.literal == kanji) {
+                    k
+                } else {
+                    term.write_line(&format!(
+                        "char you've put in: {} does not exist in db.",
+                        kanji
+                    ));
+                    term.write_line("Press any key to continue.");
+                    term.read_char();
+                    continue;
+                };
+                let strokes = k.strokes.as_ref().unwrap();
+
+                let body = strokes.generate_svg();
+                let mut f = std::fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .open("showcase.svg")
+                    .expect("Couldnt open file showcase.svg for writing.");
+
+                write!(f, "{}", body);
+                open::that("showcase.svg");
             }
             _ => {
                 return;

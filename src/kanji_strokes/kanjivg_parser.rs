@@ -29,14 +29,21 @@ impl Path {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KanjiGroup {
-    pub g: Option<Vec<KanjiGroup>>,
-    pub path: Option<Vec<Path>>,
+    #[serde(rename = "$value")]
+    pub children: Option<Vec<KanjiGroupElems>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Kanji {
     pub id: String,
     pub g: KanjiGroup,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum KanjiGroupElems {
+    G(KanjiGroup),
+    Path(Path),
 }
 
 impl Kanji {
@@ -47,15 +54,16 @@ impl Kanji {
     }
 
     fn extract_subpaths_impl(g: &KanjiGroup, paths_so_far: &mut Vec<Path>) {
-        if let Some(paths) = &g.path {
-            for p in paths {
-                paths_so_far.push(p.clone());
-            }
-        }
-
-        if let Some(subgroup) = &g.g {
-            for g in subgroup {
-                Self::extract_subpaths_impl(g, paths_so_far);
+        if let Some(children) = &g.children {
+            for c in children {
+                match c {
+                    KanjiGroupElems::G(g) => {
+                        Self::extract_subpaths_impl(g, paths_so_far);
+                    }
+                    KanjiGroupElems::Path(p) => {
+                        paths_so_far.push(p.clone());
+                    }
+                }
             }
         }
     }
@@ -70,6 +78,20 @@ pub struct Kanjivg {
 mod kanjivg_parser_test {
     use super::*;
     use serde_xml_rs as serde_xml;
+
+    fn extract_paths_on_level(g: &KanjiGroup) -> Vec<Path> {
+        if let Some(children) = &g.children {
+            children
+                .iter()
+                .filter_map(|c| match c {
+                    KanjiGroupElems::G(_) => None,
+                    KanjiGroupElems::Path(p) => Some(p.clone()),
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
 
     #[test]
     fn basic_deser() {
@@ -100,13 +122,15 @@ mod kanjivg_parser_test {
         let x = x.unwrap();
         let first = x.kanji.first().unwrap();
         assert_eq!(first.id, "kvg:kanji_00021");
-        let paths = first.g.path.as_ref().unwrap();
+
+        let paths = extract_paths_on_level(&first.g);
         assert_eq!(paths.len(), 2);
         assert_eq!(first.extract_subpaths().len(), 2);
 
         let second = x.kanji.get(1).unwrap();
         assert_eq!(second.id, "kvg:kanji_04e2a");
-        assert!(second.g.path.is_none());
+
+        assert!(extract_paths_on_level(&second.g).is_empty());
 
         assert_eq!(second.extract_subpaths().len(), 3);
 

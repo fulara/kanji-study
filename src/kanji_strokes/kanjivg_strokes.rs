@@ -1,9 +1,12 @@
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
+
 use super::kanjivg_parser;
 use crate::kanji_strokes::Kanjivg;
 
-struct KanjiDrawRecipe {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KanjiDrawRecipe {
     paths: Vec<kanjivg_parser::Path>,
 }
 
@@ -86,7 +89,7 @@ impl KanjiDrawRecipe {
             "navy",
         ]
     }
-    fn generate_svg(&self) -> String {
+    pub fn generate_svg(&self) -> String {
         let header = r#"<svg width="109" height="109" viewBox="0 0 109 109" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" version="1.1"  baseProfile="full">"#;
         let tail = r#"</svg>"#;
 
@@ -104,7 +107,7 @@ impl KanjiDrawRecipe {
                 x = x,
                 y = y,
                 color = Self::color_table()[index],
-                index = index+1,
+                index = index + 1,
             )
         }
 
@@ -117,18 +120,19 @@ impl KanjiDrawRecipe {
     }
 }
 
-struct Strokes {
-    dict: BTreeMap<char, KanjiDrawRecipe>,
+#[derive(Clone, Debug)]
+pub struct Strokes {
+    pub dict: BTreeMap<char, KanjiDrawRecipe>,
 }
 
-fn parse_kanjivg() -> kanjivg_parser::Kanjivg {
+pub fn parse_kanjivg() -> kanjivg_parser::Kanjivg {
     serde_xml_rs::from_reader(
         std::fs::File::open("kanjivg.xml").expect("Couldnt open kanjivg file"),
     )
     .expect("Couldnt parse kanjivg struct!")
 }
 
-fn kanjivg_into_strokes(kanjivg: &kanjivg_parser::Kanjivg) -> Strokes {
+pub fn kanjivg_into_strokes(kanjivg: &kanjivg_parser::Kanjivg) -> Strokes {
     let dict = kanjivg
         .kanji
         .iter()
