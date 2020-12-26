@@ -3,8 +3,9 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use bincode::deserialize;
 use rand::Rng;
-use std::io::Write;
+use std::io::{BufReader, Write};
 
 mod kanji_dict;
 mod kanji_strokes;
@@ -14,7 +15,6 @@ struct Kanji {
     on_readings: Vec<String>,
     kun_readings: Vec<String>,
     meaning: Vec<String>,
-    strokes: Option<kanji_strokes::KanjiDrawRecipe>,
     literal: char,
 }
 
@@ -72,10 +72,7 @@ impl Book {
     }
 }
 
-fn convert_parsed_to_kanji_vec(
-    kanji_dictionary: &kanji_dict::KanjiDictionary,
-    kanji_strokes_dict: &kanji_strokes::Strokes,
-) -> Vec<Kanji> {
+fn convert_parsed_to_kanji_vec(kanji_dictionary: &kanji_dict::KanjiDictionary) -> Vec<Kanji> {
     let mut kanji_vec = Vec::new();
     for c in &kanji_dictionary.character {
         let mut reading_on = Vec::new();
@@ -104,65 +101,51 @@ fn convert_parsed_to_kanji_vec(
             literal: c.literal,
             kun_readings: reading_kun,
             on_readings: reading_on,
-            strokes: kanji_strokes_dict.dict.get(&c.literal).cloned(),
         });
     }
 
     kanji_vec
 }
 
-fn build_sled_db(sled_db: &sled::Tree, lookup_dict: &Vec<Kanji>) {
-    println!(
-        "now writing to sled: {}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .expect("before")
-            .as_secs()
-    );
-    for k in lookup_dict {
-        let v = serde_json::to_string(&k).expect("unable to ser");
-        sled_db.insert(k.literal.to_string(), v.as_str());
-    }
-    sled_db.flush();
-    println!(
-        "done writing to sled: {}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .expect("after")
-            .as_secs()
-    );
+fn dump_kanjis(lookup_dict: &Vec<Kanji>) {
+    let v = serde_json::to_string(&lookup_dict).expect("unable to ser");
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open("kanji.json")
+        .expect("Couldnt open file showcase.svg for writing.");
+
+    f.write(v.as_bytes());
 }
 
-fn load_sled_db_to_silly_vec(sled_db: &sled::Tree) -> Vec<Kanji> {
-    let mut silly_vec = Vec::new();
-    println!(
-        "now converting from sled: {}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .expect("before")
-            .as_secs()
-    );
-    for e in sled_db.iter() {
-        let e = e.unwrap();
-        // let key= String::from_utf8(e.0.to_vec()).unwrap();
-        let kanji = serde_json::from_slice(&e.1.to_vec()).unwrap();
+fn dump_db(db: &Database) {
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open("db.bin")
+        .expect("Couldnt open file showcase.svg for writing.");
+    bincode::serialize_into(f, db);
+}
 
-        silly_vec.push(kanji);
-    }
-    println!(
-        "finished converting from sled: {}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .expect("before")
-            .as_secs()
-    );
-
-    silly_vec
+fn load_db_from_plain_file() -> Database {
+    let f = std::fs::OpenOptions::new()
+        .read(true)
+        .open("db.bin")
+        .expect("couldnt load kanji.json for reading");
+    let reader = BufReader::new(f);
+    let db = bincode::deserialize_from(reader).expect("couldnt decode kanji vec");
+    db
 }
 
 fn parse_dict() -> kanji_dict::KanjiDictionary {
     serde_xml_rs::from_reader(std::fs::File::open("kanjidic2.xml").expect("Couldnt open dict file"))
         .expect("Couldnt load dict!")
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct Database {
+    kanjis: Vec<Kanji>,
+    strokes: BTreeMap<char, kanji_strokes::KanjiDrawRecipe>,
 }
 
 fn main() {
@@ -174,26 +157,21 @@ fn main() {
         BTreeMap::new()
     };
 
-    if !std::path::Path::new("kanji.db").exists() {
+    if !std::path::Path::new("db.bin").exists() {
         let kanjivg = kanji_strokes::parse_kanjivg();
         let strokes = kanji_strokes::kanjivg_into_strokes(&kanjivg);
         let dict = parse_dict();
 
-        let parsed = convert_parsed_to_kanji_vec(&dict, &strokes);
+        let parsed = convert_parsed_to_kanji_vec(&dict);
+        let db = Database {
+            strokes: strokes.dict,
+            kanjis: parsed,
+        };
 
-        let db = sled::open("kanji.db").expect("opening db files");
-
-        build_sled_db(&db, &parsed);
+        dump_db(&db);
     }
 
-    // std::
-    // if(Path::)
-
-    let db = sled::open("kanji.db").expect("opening db files");
-
-    let lookup_dict = load_sled_db_to_silly_vec(&db);
-
-    // let mut lookup_dict = Vec::new();
+    let db = load_db_from_plain_file();
 
     let mut book = Book::new(entries);
 
@@ -231,7 +209,7 @@ fn main() {
 
                 let mut matching_kanjis = Vec::new();
 
-                for k in &lookup_dict {
+                for k in &db.kanjis {
                     if pattern.contains(k.literal) || k.meaning.iter().any(|m| m.contains(&pattern))
                     {
                         matching_kanjis.push(k.clone());
@@ -282,8 +260,18 @@ fn main() {
             's' => {
                 term.write_line("Type in kanji you want to see the strokes of");
                 let kanji = term.read_char().expect("char was suppoesd to be here!");
-                let k = if let Some(k) = lookup_dict.iter().find(|p| p.literal == kanji) {
-                    k
+                let strokes = if let Some(k) = db.kanjis.iter().find(|p| p.literal == kanji) {
+                    if let Some(stroke) = db.strokes.get(&k.literal) {
+                        stroke
+                    } else {
+                        term.write_line(&format!(
+                            "Kanji has been recognized but it seems we dont have strokes for it: {}",
+                            k.literal
+                        ));
+                        term.write_line("Press any key to continue.");
+                        term.read_char();
+                        continue;
+                    }
                 } else {
                     term.write_line(&format!(
                         "char you've put in: {} does not exist in db.",
@@ -293,8 +281,6 @@ fn main() {
                     term.read_char();
                     continue;
                 };
-                let strokes = k.strokes.as_ref().unwrap();
-
                 let body = strokes.generate_svg();
                 let mut f = std::fs::OpenOptions::new()
                     .write(true)
