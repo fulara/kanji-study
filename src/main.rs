@@ -3,14 +3,16 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use crate::kanji_strokes::KanjiDrawRecipe;
 use bincode::deserialize;
+use console::Term;
 use rand::Rng;
 use std::io::{BufReader, Write};
 
 mod kanji_dict;
 mod kanji_strokes;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 struct Kanji {
     on_readings: Vec<String>,
     kun_readings: Vec<String>,
@@ -18,9 +20,19 @@ struct Kanji {
     literal: char,
 }
 
+impl Kanji {
+    fn pretty_print(&self) -> String {
+        // maybe as display one day.
+        format!(
+            "kanji: {}, meanings: {:?}, on_readings: {:?}, kun_readings: {:?}",
+            self.literal, self.meaning, self.on_readings, self.kun_readings
+        )
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Entry {
-    kanji: Kanji,
+    kanji: char,
     confidence_level: i32, // 0 - 5?
 }
 
@@ -51,7 +63,7 @@ impl Book {
     }
 
     pub fn add(&mut self, entry: Entry) {
-        self.kanjis.insert(entry.kanji.literal, entry);
+        self.kanjis.insert(entry.kanji, entry);
     }
     pub fn save(&self, file_name: &str) {
         println!("will now attempt to serialize: {:?}", self);
@@ -134,6 +146,7 @@ fn load_db_from_plain_file() -> Database {
         .expect("couldnt load kanji.json for reading");
     let reader = BufReader::new(f);
     let db = bincode::deserialize_from(reader).expect("couldnt decode kanji vec");
+
     db
 }
 
@@ -142,10 +155,66 @@ fn parse_dict() -> kanji_dict::KanjiDictionary {
         .expect("Couldnt load dict!")
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 struct Database {
     kanjis: Vec<Kanji>,
     strokes: BTreeMap<char, kanji_strokes::KanjiDrawRecipe>,
+}
+
+impl Database {
+    fn find(&self, pattern: &str) -> Vec<(Kanji, Option<KanjiDrawRecipe>)> {
+        let mut matching_kanjis = Vec::new();
+
+        for k in &self.kanjis {
+            if pattern.contains(k.literal) || k.meaning.iter().any(|m| m == pattern) {
+                matching_kanjis.push((k.clone(), self.strokes.get(&k.literal).cloned()));
+            }
+        }
+
+        matching_kanjis
+    }
+}
+
+fn ask_user_to_select_one_from_result(
+    term: &console::Term,
+    pattern: &str,
+    results: &[(Kanji, Option<KanjiDrawRecipe>)],
+) -> Option<(Kanji, Option<KanjiDrawRecipe>)> {
+    if results.is_empty() {
+        term.write_line(&format!(
+            "Your pattern: '{}' has not matched any of the kanjis in db.",
+            pattern
+        ));
+    }
+
+    if results.len() == 1 {
+        return Some(results[0].clone());
+    }
+
+    term.write_line("Matched kanjis:");
+    for (i, k) in results.iter().enumerate() {
+        term.write_line(&format!("{}: {}", i, k.0.pretty_print()));
+    }
+
+    term.write_line("Has any of those matched your query? pick the number");
+
+    let number: usize = term
+        .read_line()
+        .unwrap()
+        .parse()
+        .expect("That wasnt a number");
+    if let Some(k) = results.get(number) {
+        return Some(k.clone());
+    } else {
+        term.write_line(&format!(
+            "Number: {}, you have selected was out of range [{}-{}]",
+            number,
+            0,
+            results.len() - 1
+        ));
+    }
+
+    return None;
 }
 
 fn main() {
@@ -206,41 +275,26 @@ fn main() {
                 term.write_line("Gimme Pattern to search the dict by either kanji or meaning: ")
                     .unwrap();
                 let pattern = term.read_line().unwrap();
+                let matching_kanjis = db.find(&pattern);
 
-                let mut matching_kanjis = Vec::new();
-
-                for k in &db.kanjis {
-                    if pattern.contains(k.literal) || k.meaning.iter().any(|m| m.contains(&pattern))
-                    {
-                        matching_kanjis.push(k.clone());
-                    }
-                }
-
-                term.write_line("Matched kanjis:");
-                for (i, k) in matching_kanjis.iter().enumerate() {
-                    term.write_line(&format!("{}: {:?}", i, k));
-                }
-
-                term.write_line("Has any of those matched your query? pick the number");
-
-                let number: usize = term
-                    .read_line()
-                    .unwrap()
-                    .parse()
-                    .expect("That wasnt a number");
-                if let Some(k) = matching_kanjis.get(number) {
-                    term.write_line(&format!("You have selected: {:?}", k));
+                if let Some(single_result) =
+                    ask_user_to_select_one_from_result(&term, &pattern, &matching_kanjis)
+                {
+                    term.write_line(&format!(
+                        "You have selected: {}",
+                        single_result.0.pretty_print()
+                    ));
 
                     term.write_line("Do you wish to add it to your knowledge base? [y/N]");
                     if term.read_char().unwrap().to_ascii_lowercase() == 'y' {
                         book.add_save(
                             Entry {
-                                kanji: k.clone(),
+                                kanji: single_result.0.literal,
                                 confidence_level: 0,
                             },
                             file_name,
                         );
-                        term.write_line(&format!("Added {} to your base", k.literal));
+                        term.write_line(&format!("Added {} to your base", single_result.0.literal));
                     } else {
                         term.write_line("Skipping addition.");
                     }
@@ -258,38 +312,42 @@ fn main() {
                 term.read_char();
             }
             's' => {
-                term.write_line("Type in kanji you want to see the strokes of");
-                let kanji = term.read_char().expect("char was suppoesd to be here!");
-                let strokes = if let Some(k) = db.kanjis.iter().find(|p| p.literal == kanji) {
-                    if let Some(stroke) = db.strokes.get(&k.literal) {
-                        stroke
+                term.write_line("Type in pattern by which you want to search");
+                let pattern = term.read_line().expect("char was supposed to be here!");
+                let result = db.find(&pattern);
+                if result.is_empty() {
+                    term.write_line(&format!(
+                        "pattern you've put in: {} does not exist in db.",
+                        pattern
+                    ));
+                    continue;
+                }
+                //meh we need to handle multiple prints but for now lets just take first one.
+
+                if let Some(single_result) =
+                    ask_user_to_select_one_from_result(&term, &pattern, &result)
+                {
+                    let strokes = &single_result.1;
+                    if let Some(strokes) = strokes {
+                        let body = strokes.generate_svg();
+                        let mut f = std::fs::OpenOptions::new()
+                            .write(true)
+                            .create(true)
+                            .open("showcase.svg")
+                            .expect("Couldnt open file showcase.svg for writing.");
+
+                        write!(f, "{}", body);
+                        open::that("showcase.svg");
                     } else {
                         term.write_line(&format!(
                             "Kanji has been recognized but it seems we dont have strokes for it: {}",
-                            k.literal
+                            single_result.0.literal
                         ));
-                        term.write_line("Press any key to continue.");
-                        term.read_char();
-                        continue;
-                    }
-                } else {
-                    term.write_line(&format!(
-                        "char you've put in: {} does not exist in db.",
-                        kanji
-                    ));
-                    term.write_line("Press any key to continue.");
-                    term.read_char();
-                    continue;
-                };
-                let body = strokes.generate_svg();
-                let mut f = std::fs::OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .open("showcase.svg")
-                    .expect("Couldnt open file showcase.svg for writing.");
-
-                write!(f, "{}", body);
-                open::that("showcase.svg");
+                    };
+                }
+                term.write_line("Press any key to continue.");
+                term.read_char();
+                continue;
             }
             _ => {
                 return;
