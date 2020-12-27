@@ -66,8 +66,6 @@ impl Book {
         self.kanjis.insert(entry.kanji, entry);
     }
     pub fn save(&self, file_name: &str) {
-        println!("will now attempt to serialize: {:?}", self);
-
         let serialized = serde_json::to_string(&self.kanjis).expect("Unable to serialize book!");
         let mut f = std::fs::OpenOptions::new()
             .write(true)
@@ -217,6 +215,26 @@ fn ask_user_to_select_one_from_result(
     return None;
 }
 
+fn show_strokes(term: &Term, literal: char, strokes: &Option<KanjiDrawRecipe>) {
+    if let Some(strokes) = strokes {
+        let body = strokes.generate_svg();
+        let mut f = std::fs::OpenOptions::new()
+            .truncate(true)
+            .write(true)
+            .create(true)
+            .open("showcase.svg")
+            .expect("Couldnt open file showcase.svg for writing.");
+
+        write!(f, "{}", body);
+        open::that("showcase.svg");
+    } else {
+        term.write_line(&format!(
+            "Kanji has been recognized but it seems we dont have strokes for it: {}",
+            literal
+        ));
+    };
+}
+
 fn main() {
     let file_name = "dict.json";
     let mut entries: BTreeMap<char, Entry> = if Path::new(file_name).exists() {
@@ -245,6 +263,7 @@ fn main() {
     let mut book = Book::new(entries);
 
     let term = console::Term::stdout();
+    let mut rng = rand::thread_rng();
 
     loop {
         term.clear_screen().unwrap();
@@ -258,7 +277,53 @@ fn main() {
         term.write_line("Poll[y] add[a] add-[f]ull [l]ist anything else exits. [s]troke")
             .unwrap();
         match term.read_char().unwrap() {
-            'y' => {}
+            'q' => {
+                loop {
+                    let mut sorted = BTreeMap::new();
+                    for (k, e) in &book.kanjis {
+                        let e = sorted.entry(e.confidence_level).or_insert(Vec::new());
+                        e.push(*k);
+                    }
+
+                    let (_, kanjis) = sorted
+                        .iter()
+                        .next()
+                        .expect("tried to quiz when you dont have anything in knowledge base.");
+                    use rand::seq::SliceRandom;
+                    let quiz = kanjis.choose(&mut rng).expect("impossibru.");
+
+                    let find_result = db.find(&quiz.to_string());
+                    let k = find_result.first().expect("Has to have this entry.");
+
+                    term.write_line(&format!("Kanji that has meanings: {:?}", k.0.meaning));
+
+                    loop {
+                        term.write_line("[1/space] - you know it [2] - not confident [3] - fail [s] - see strokes");
+                        match term.read_char().expect("char!").to_ascii_lowercase() {
+                            '1' | ' ' => {
+                                book.kanjis.get_mut(quiz).unwrap().confidence_level += 1;
+                                break;
+                            }
+                            '2' => {
+                                // noop
+                                break;
+                            }
+                            '3' => {
+                                book.kanjis.get_mut(quiz).unwrap().confidence_level = 0;
+                                break;
+                            }
+                            's' => {
+                                show_strokes(&term, *quiz, &k.1);
+                            }
+                            _ => {
+                                // noop
+                            }
+                        }
+                    }
+
+                    book.save(file_name);
+                }
+            }
             'f' => {
                 // term.write_line("Selected add full, easier faster adding, here is a template:").unwrap();
                 // term.write_line(r#"{"romanjis":["ichi"],"meaning":["one"],"kanji":"一","confidence_level":{"level":0}}"#).unwrap();
@@ -328,22 +393,7 @@ fn main() {
                     ask_user_to_select_one_from_result(&term, &pattern, &result)
                 {
                     let strokes = &single_result.1;
-                    if let Some(strokes) = strokes {
-                        let body = strokes.generate_svg();
-                        let mut f = std::fs::OpenOptions::new()
-                            .write(true)
-                            .create(true)
-                            .open("showcase.svg")
-                            .expect("Couldnt open file showcase.svg for writing.");
-
-                        write!(f, "{}", body);
-                        open::that("showcase.svg");
-                    } else {
-                        term.write_line(&format!(
-                            "Kanji has been recognized but it seems we dont have strokes for it: {}",
-                            single_result.0.literal
-                        ));
-                    };
+                    show_strokes(&term, single_result.0.literal, strokes);
                 }
                 term.write_line("Press any key to continue.");
                 term.read_char();
